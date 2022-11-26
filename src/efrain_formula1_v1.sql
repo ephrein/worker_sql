@@ -1,0 +1,152 @@
+CREATE DATABASE FORMULA1;
+USE FORMULA1;
+
+SELECT * FROM drivers;
+SELECT * FROM results;
+SELECT * FROM races;
+SELECT * FROM circuits;
+
+
+-- 1. Muestre los 5 ganadores de las u ́ltimas 5 carreras, con el nombre de la carrera y su respectiva fecha.
+WITH five_races as
+    (   -- Ultimas 30 carreras
+        SELECT races.raceId, name, date
+        FROM races
+        WHERE races.raceId IS NOT NULL AND date IS NOT NULL
+        ORDER BY date DESC
+        LIMIT 30
+    ),
+    five_winers as
+    (   -- 5 ganadores de las ultimas 5 carreras
+        SELECT results.raceId, driverId, positionOrder
+        FROM results
+        WHERE positionOrder = 1
+    ),
+    five_drivers as
+    (  -- 5 ganadores en las ultimas 5 carreras
+        SELECT name, date, driverId
+        FROM five_winers
+        RIGHT JOIN five_races
+        ON five_winers.raceId = five_races.raceId
+        WHERE driverId IS NOT NULL
+        ORDER BY date DESC
+        LIMIT 5
+    )
+        -- Tabla resultado Nombre Carrera, fecha y Piloto Campeon
+        SELECT name, date, forename, surname
+        FROM five_drivers
+        LEFT JOIN drivers
+        ON five_drivers.driverId = drivers.driverId;
+
+
+-- 2. Muestre los 5 lideres de puntos entre el año 2000 y el año 2017, con su fecha de nacimiento y nacionalidad.
+WITH race_years as
+    (   -- carreras entre 2000 y 2017
+        SELECT races.raceId
+        FROM races
+        WHERE year >= 2000 AND year <= 2017
+    ),
+    race_drivers as
+    (   -- Pilotos y puntos
+        SELECT results.raceId, results.driverId,  points
+        FROM results
+        WHERE points IS NOT NULL AND points != 0
+    ),
+    drivers_point as
+    (
+        SELECT driverId, SUM(points) puntaje_total
+        FROM race_years
+        LEFT JOIN race_drivers
+        ON race_years.raceId = race_drivers.raceId
+        GROUP BY driverId
+        ORDER BY puntaje_total DESC
+        LIMIT 5
+    )
+    SELECT forename, surname, dob, nationality, puntaje_total
+    FROM drivers_point
+    LEFT JOIN drivers
+    ON drivers_point.driverId = drivers.driverId
+    ORDER BY puntaje_total DESC;
+
+
+
+-- 3. Muestre los 5 pilotos mas ganadores de la historia (entre el año 1950 y 2017).
+-- 4. Muestre la cantidad de victorias del piloto ḿas ganador (entre el an ̃o 1950 y 2017).
+WITH a_races as
+    (   -- Registros de los campeones de cada carrera en (results)
+        SELECT results.raceId, driverId, positionOrder
+        FROM results
+        WHERE positionOrder = 1
+    ),
+    a_drivers as
+    (   -- Todas las carreras entre 1950 y 2017
+        SELECT races.raceId, date
+        FROM races
+        WHERE date >= 1950 AND date <= 2017
+    ),
+    a_champion as
+    (   -- suma de victorias en carreras por piloto
+        SELECT driverId, SUM(positionOrder) num_victories
+        FROM a_races
+        LEFT JOIN a_drivers
+        ON a_races.raceId = a_drivers.raceId
+        GROUP BY driverId
+        ORDER BY num_victories DESC
+        LIMIT 5
+    )
+    -- tabla final con 5 pilotos mas ganadores y el total de sus victorias
+    SELECT forename, surname, num_victories
+    FROM drivers
+    RIGHT JOIN a_champion
+    ON drivers.driverId = a_champion.driverId
+
+
+-- 5. Muestre el tiempo transcurrido entre la primera y la última victoria del piloto mas ganador, encontrado en la pregunta anterior.
+SET @idmax_winner = 30;
+WITH win_mschu as
+    (   -- Carreras en las que Michael Schumacher ganó
+        SELECT results.raceId
+        FROM results
+        WHERE driverId = @idmax_winner AND positionOrder = 1
+    ),
+    dates_win_mschu as
+    (
+        SELECT name, date
+        FROM win_mschu
+        LEFT JOIN races
+        ON win_mschu.raceId = races.raceId
+        ORDER BY date ASC
+    )
+    SELECT ROUND(DATEDIFF (MAX(date), MIN(date)) / 365,0) `Años entre 1ra y ultima victoria de M.Schumacher`
+    FROM dates_win_mschu;
+
+
+-- 6. Muestre los 5 páıses con mas puntos.
+WITH nat_point as
+    (
+        SELECT results.driverId, SUM(points) puntos_total
+        FROM results
+        WHERE points IS NOT NULL AND points != 0
+        GROUP BY results.driverId
+        ORDER BY puntos_total DESC
+    ),
+    nation as
+    (
+        SELECT drivers.driverId, nationality
+        FROM drivers
+    )
+    SELECT nationality, ROUND(SUM(puntos_total),0) puntos_total_nationality
+    FROM nat_point
+    LEFT JOIN nation
+    ON nat_point.driverId = nation.driverId
+    GROUP BY nationality
+    ORDER BY puntos_total_nationality DESC
+    LIMIT 5;
+
+
+
+
+
+
+
+
